@@ -8,6 +8,8 @@ import Control.Monad.Writer
 
 import Debug.Trace
 
+import TheMonad
+
 -- SYNTAX
 
 type Name = String
@@ -45,6 +47,7 @@ instance Show Value where
 
 --instance Show Method where show (Method f) = show (f undefined)
 --instance Show Body where show (Body f) = "let " ++ show (f undefined)
+
 instance Show Object where show (Object m) = show (toList m)
 
 -- HELPERS
@@ -66,7 +69,7 @@ programToMethod p = Method $ \_ -> p
 
 -- EVALUATOR
 
-getMethod :: Object -> Name -> Writer String Method
+getMethod :: Object -> Name -> TheMonad Method
 getMethod obj@(Object o) n =
   case Map.lookup n o of
     Just m  -> return m
@@ -76,18 +79,7 @@ getMethod obj@(Object o) n =
                       getMethod so n
         Nothing -> error $ "no method \"" ++ n ++ "\""
 
-{-
-getMethod :: Object -> Name -> Writer String Method
-getMethod obj@(Object o) n =
-  case Map.lookup n o of
-    Just m  -> return m
-    Nothing -> case Map.lookup "super" o of
-      Just s  -> do New so <- reduce (readField s obj)
-                    getMethod so n
-      Nothing -> error $ "no method \"" ++ n ++ "\""
--}
-
-updateMethod :: Object -> Name -> Method -> Writer String Object
+updateMethod :: Object -> Name -> Method -> TheMonad Object
 updateMethod obj@(Object o) n m =
   case Map.lookup n o of
     -- the method is declared on top-level -- overwrite here!
@@ -101,18 +93,12 @@ updateMethod obj@(Object o) n m =
            return $ Object (Map.insert "super" sm o)
       Nothing -> error $ "no method \"" ++ n ++ "\""
 
-{-
-updateMethod :: Object -> Name -> Method -> Writer String Object
-updateMethod obj@(Object o) n m =
-  return (Object (Map.insert n m o))
--}
-
-reduce :: Program -> Writer String Value
-reduce p =
-  --trace ("*** reducing " ++ show p)
+reduce :: Program -> TheMonad Value
+reduce p = do
+  statRed
   (reduce' p)
 
-reduce' :: Program -> Writer String Value
+reduce' :: Program -> TheMonad Value
 reduce' (Operator s p1 p2) =
   operator s p1 p2
 reduce' (If b p1 p2) = do
@@ -142,16 +128,16 @@ reduce' (Let ps (Body f)) = do
   reduce (f vs)
 reduce' (Print p) = do
   x <- reduce p
-  tell (show x)
+  io $ putStr $ show x
   return unit
 reduce' (Value Error) = error "undefined \"?\""
 reduce' (Value v) = return v
 
-reduceMethod :: Object -> Method-> Writer String Value
+reduceMethod :: Object -> Method-> TheMonad Value
 reduceMethod o (Method p) =
   reduce (p o)
 
-reduceIf :: Value -> Program -> Program -> Writer String Value
+reduceIf :: Value -> Program -> Program -> TheMonad Value
 reduceIf (Int 1) p _ = reduce p
 reduceIf (Int 0) _ p = reduce p
 reduceIf _ _ _       = error "type error: expected a boolean in if-then-else" 
@@ -178,7 +164,7 @@ chainUpdate q cb ns m = aux q ns
 
 -- OPERATORS
 
-operator :: String -> Program -> Program -> Writer String Value
+operator :: String -> Program -> Program -> TheMonad Value
 operator ";" p1 p2 = do
   reduce p1
   reduce p2
@@ -187,7 +173,7 @@ operator s p1 p2 |  (s `elem` fmap return "+-*/><")
   arith s p1 p2
 operator s _ _ = error $ "Unknown operator \"" ++ s ++ "\""
 
-arith :: String -> Program -> Program -> Writer String Value
+arith :: String -> Program -> Program -> TheMonad Value
 arith s p1 p2 = do
   v1 <- reduce p1
   v2 <- reduce p2

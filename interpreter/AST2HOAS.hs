@@ -50,3 +50,9 @@ object st (AST.Object m) = HOAS.Object $ fmap (method st) m
 cb :: AST.CB -> HOAS.CB
 cb AST.CBN = HOAS.CBN
 cb AST.CBV = HOAS.CBV
+
+identError :: AST.Name -> a
+identError i = error $ "unknown identifier \"" ++ i ++ "\""
+
+ast2hoas :: AST.Program -> HOAS.Program
+ast2hoas = program identError
