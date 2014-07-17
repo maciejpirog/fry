@@ -9,4 +9,4 @@ The theoretical foundation of Fry is Martín Abadi and Luca Cardelli's calculus 
 
 Note that Fry is in its infancy. A lot of changes to the language and surroundings are bound to happen, some of them revolutionary, all of them unpredictable.
 
-Fry's homepage (tutorials and examples): [link](http://maciejpirog.github.io/fry)
+Fry's homepage (tutorials and examples): [http://maciejpirog.github.io/fry](http://maciejpirog.github.io/fry)
