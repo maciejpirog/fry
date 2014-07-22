@@ -1,4 +1,4 @@
-(setq frylang-keywords '("let" "be" "and" "in" "if" "then" "else" "object" "extends" "more") )
+(setq frylang-keywords '("let" "be" "and" "in" "if" "then" "else" "object" "extends" "fun") )
 (setq frylang-emphasis '("this" "super"))
 (setq frylang-builtin '())
 (setq frylang-constants '("true" "false"))

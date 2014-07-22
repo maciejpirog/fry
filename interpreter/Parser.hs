@@ -15,7 +15,7 @@ type Parser = Parsec String ()
 
 keywords, resOps :: [String]
 keywords = ["print", "let", "and", "be", "in", -- core
-            "object", "extends", "more", "if", "then", "else", "true", "false"] -- sugar
+            "object", "extends", "fun", "if", "then", "else", "true", "false"] -- sugar
 resOps = ["->"] ++ map return "=.;@*/+-$?~"
 
 fryStyle :: LanguageDef st
@@ -86,6 +86,11 @@ classDecl = do reserved "object"
                return (n, if s == ""
                             then obj
                             else AST.Object (Map.insert "super" (AST.Method "" (AST.Ident s)) m))
+          <|> do reserved "fun"
+                 (name, AST.Method _ (AST.Value (AST.New body)))
+                   <- methodDecl undefined
+                 reserved "in"
+                 return (name, body)
           <?> "object definition"
 
 --
@@ -144,8 +149,6 @@ makeLambda n p =
     Map.fromList [ ("arg", AST.Method "" AST.nil), ("val", val n)]
  where
    val (LamCBV n) = AST.Method n (AST.subst n (AST.Invoke (AST.Ident n) "arg") p)
---  val (LamCBN n) = AST.Method n (AST.subst n (AST.Invoke (AST.Ident n) "arg") p)
--- val (LamCBV n) = AST.Method n (AST.Let [('_':n, AST.Invoke (AST.Ident n) "arg")] (AST.Body (AST.subst n (AST.Ident ('_':n)) p)))
 
 letClause :: Parser (AST.Name, AST.Program)
 letClause = do n <- identifier

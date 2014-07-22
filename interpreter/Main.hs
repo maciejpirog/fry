@@ -21,6 +21,11 @@ runFile verbose prog = do
   when verbose (putStrLn $ "(in " ++ show n ++ " reduction"
              ++ (if n /= 1 then "s" else "") ++ ")")
 
+interp :: String -> IO ()
+interp s = do
+  f <- readFile s
+  runFile True f
+
 parseArgs :: [String] -> ([String], Bool)
 parseArgs [] = ([], False)
 parseArgs ("-v" : xs) = let (s, _) = parseArgs xs in (s, True)
