@@ -39,6 +39,7 @@ instance Show Value where
   show (New o) = show o
   show (Int i) = show i
   show (Str s) = s
+  show (Error) = "?"
 
 --instance Show Method where show (Method n f) = show n ++ show f
 --instance Show Body where show (Body f) = "let " ++ show (f undefined)

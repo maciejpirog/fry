@@ -1,3 +1,5 @@
+{-# LANGUAGE DeriveDataTypeable #-}
+
 module TheMonad where
 
 {-
@@ -14,7 +16,9 @@ of the interpreter. Its purpose is twofold:
 
 import Control.Monad
 import Control.Monad.Writer
+import Control.Exception
 import Data.Monoid
+import Data.Typeable
 
 data Stats = Stats
   {
@@ -29,6 +33,20 @@ type TheMonad = WriterT Stats IO
 
 io :: IO a -> TheMonad a
 io = lift
+
+data RuntimeException = RuntimeException String                
+  deriving (Typeable)
+
+instance Exception RuntimeException
+
+instance Show RuntimeException where
+  show (RuntimeException s) = s
+
+err :: String -> TheMonad a
+err = io . throw . RuntimeException
+
+toIO :: TheMonad a -> IO a
+toIO = fmap fst . runWriterT
 
 stats :: TheMonad a -> IO Stats
 stats = execWriterT

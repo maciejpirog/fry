@@ -1,5 +1,6 @@
 module Parser where
 
+import Control.Exception (throw)
 import Text.Parsec
 import qualified Text.Parsec.Token as Lex
 import Text.Parsec.Language
@@ -10,12 +11,13 @@ import qualified Data.List as List
 import Debug.Trace
 
 import qualified AST as AST
+import TheMonad
 
 type Parser = Parsec String ()
 
 keywords, resOps :: [String]
 keywords = ["print", "let", "and", "be", "in", -- core
-            "object", "extends", "fun", "if", "then", "else", "true", "false"] -- sugar
+            "object", "extends", "fun", "end", "if", "then", "else", "true", "false"] -- sugar
 resOps = ["->"] ++ map return "=.;@*/+-$?~"
 
 fryStyle :: LanguageDef st
@@ -39,6 +41,7 @@ whiteSpace = Lex.whiteSpace lexer
 lexeme     = Lex.lexeme lexer
 symbol     = Lex.symbol lexer
 natural    = Lex.natural lexer
+integer    = Lex.integer lexer
 parens     = Lex.parens lexer
 braces     = Lex.braces lexer
 brackets   = Lex.brackets lexer
@@ -89,7 +92,7 @@ classDecl = do reserved "object"
           <|> do reserved "fun"
                  (name, AST.Method _ (AST.Value (AST.New body)))
                    <- methodDecl undefined
-                 reserved "in"
+                 reserved "end"
                  return (name, body)
           <?> "object definition"
 
@@ -114,10 +117,6 @@ program =   do reserved "let"
                reserved "else"
                p2 <- decls
                return (AST.If b p1 p2)
-        <|> do reserved "true"
-               return (AST.Value $ AST.Int 1)
-        <|> do reserved "false"
-               return (AST.Value $ AST.Int 0)
         <|> do symbol "\\" -- lambda abstraction
                ns <- many1 lambdaIdent
                reservedOp "->"
@@ -125,6 +124,7 @@ program =   do reserved "let"
                return (makeLambdas ns p)
         <|> do apps <- many1 access
                return (makeLambdaApps apps)
+        <?> "expression"
 
 data LambdaIdent = LamCBN AST.Name | LamCBV AST.Name
 
@@ -185,9 +185,14 @@ factor =   do i <- identifier
               return (AST.Value $ AST.Int n)
        <|> do s <- stringLit
               return (AST.Value $ AST.Str s)
+       <|> do reserved "true"
+              return (AST.Value $ AST.Int 1)
+       <|> do reserved "false"
+              return (AST.Value $ AST.Int 0)
        <|> do try (reserved "print")
               x <- factor;
               return (AST.Print x)
+       <?> "expression"
 
 object :: Parser AST.Object
 object = do methods <- brackets
@@ -223,14 +228,29 @@ this dt =   try (symbol "@" >> identifier)
         <|> try (symbol "@" >> symbol "_" >> return "")
         <|> return dt
 
-mainParser :: Parser AST.Program
-mainParser = do whiteSpace
-                x <- decls
-                eof
-                return x
+expressionParser :: Parser AST.Program
+expressionParser = do
+  whiteSpace
+  x <- decls
+  eof
+  return x
+
+moduleParser :: Parser AST.Program
+moduleParser = do
+  whiteSpace
+  cd <- many classDecl
+  p <- option (AST.nil) expr
+  eof
+  return $ smartLet cd (AST.Body p)
+
+runModuleParser :: String -> AST.Program
+runModuleParser input =
+  case (parse moduleParser "" input) of
+    Left  err -> throw $ RuntimeException $ "parse error at " ++ show err
+    Right x   -> x
 
 parser :: String -> AST.Program
-parser input = case (parse mainParser "" input) of
-  Left  err -> error $ "parse error at " ++ show err
+parser input = case (parse expressionParser "" input) of
+  Left  err -> throw $ RuntimeException $ "parse error at " ++ show err
   Right x   -> x
 

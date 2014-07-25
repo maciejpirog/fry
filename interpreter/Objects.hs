@@ -3,6 +3,7 @@ module Objects where
 import Data.List
 import Data.Map as Map
 import Data.Maybe
+import Control.Exception
 import Control.Monad
 import Control.Monad.Writer
 
@@ -17,38 +18,36 @@ type Name = String
 data CB = CBV | CBN
   deriving(Show,Eq)
 
-data Program = Invoke Program Name
-             | Update Program CB Name Method
-             | Let [Program] Body
-             | Operator String Program Program
-             | If Program Program Program
-             | Print Program
-             | Value Value
+data Program = Invoke !Program !Name
+             | Update !Program !CB !Name !Method
+             | Let [Program] !Body
+             | Operator !String !Program !Program
+             | If !Program !Program !Program
+             | Print !Program
+             | Value !Value
              deriving(Show)
 
-data Body = Body ([Value] -> Program)
+newtype Body = Body ([Value] -> Program)
 
-data Value = New Object
+data Value = New !Object
            | Error
            | Int Integer
            | Str String
 
-data Method = Method (Object -> Program)
+newtype Method = Method (Object -> Program)
 
-data Object = Object (Map.Map Name Method)
+newtype Object = Object (Map.Map Name Method)
 
-instance Show Method where show _ = "{method}"
-instance Show Body where show _ = "{body}"
+instance Show Object where
+  show (Object x) = show $ fmap fst (Map.toList x)
+
+instance Show Method where show _ = "(...)"
+instance Show Body where show _ = "(...)"
 
 instance Show Value where
   show (New obj) = show obj
   show (Int i)   = show i
   show (Str s)   = s
-
---instance Show Method where show (Method f) = show (f undefined)
---instance Show Body where show (Body f) = "let " ++ show (f undefined)
-
-instance Show Object where show (Object m) = show (toList m)
 
 -- HELPERS
 
@@ -59,7 +58,7 @@ readField :: Method -> Object -> Program
 readField (Method m) obj = m obj
 
 getField :: Name -> Object -> Program
-getField n (Object m) = readField ((Map.!) m n) (error "not a field!") 
+getField n (Object m) = readField ((Map.!) m n) (throw $ RuntimeException "not a field!") 
 
 objectToMethod :: Object -> Method
 objectToMethod o = Method $ \_ -> Value (New o)
@@ -77,7 +76,7 @@ getMethod obj@(Object o) n =
       case Map.lookup "super" o of
         Just s  -> do New so <- reduce (readField s obj)
                       getMethod so n
-        Nothing -> error $ "no method \"" ++ n ++ "\""
+        Nothing -> throw $ RuntimeException $ "no method \"" ++ n ++ "\" in " ++ show obj
 
 updateMethod :: Object -> Name -> Method -> TheMonad Object
 updateMethod obj@(Object o) n m =
@@ -91,7 +90,7 @@ updateMethod obj@(Object o) n m =
            so' <- updateMethod so n m
            let sm = objectToMethod so'
            return $ Object (Map.insert "super" sm o)
-      Nothing -> error $ "no method \"" ++ n ++ "\""
+      Nothing -> throw $ RuntimeException $ "no method \"" ++ n ++ "\" in " ++ show obj
 
 reduce :: Program -> TheMonad Value
 reduce p = do
@@ -109,20 +108,20 @@ reduce' (Invoke p l) = do
   case o' of
     New o -> do m <- getMethod o l
                 reduceMethod o m
-    _ -> error (show o')
+    _ -> throw $ RuntimeException $ (show o') ++ " is not an object"
 reduce' (Update p CBV l (Method f)) = do
   v <- reduce p
   case v of
    New o -> do k <- reduce (f o)
                o' <- updateMethod o l (programToMethod (Value k))
                return (New o')
-   k -> error $ "trying to update a field " ++ l ++ " in " ++ show k
+   k -> throw $ RuntimeException $ "type error: " ++ show k ++ " not an object"
 reduce' (Update p CBN l m) = do
   v <- reduce p
   case v of
    New o -> do o' <- updateMethod o l m
                return (New o')
-   k -> error $ "trying to update a field " ++ l ++ " in " ++ show k
+   k -> throw $ RuntimeException $ "type error: " ++ show k ++ " not an object"
 reduce' (Let ps (Body f)) = do
   vs <- mapM reduce ps
   reduce (f vs)
@@ -130,7 +129,7 @@ reduce' (Print p) = do
   x <- reduce p
   io $ putStr $ show x
   return unit
-reduce' (Value Error) = error "undefined \"?\""
+reduce' (Value Error) = throw $ RuntimeException $  "reached \"?\""
 reduce' (Value v) = return v
 
 reduceMethod :: Object -> Method-> TheMonad Value
@@ -140,7 +139,7 @@ reduceMethod o (Method p) =
 reduceIf :: Value -> Program -> Program -> TheMonad Value
 reduceIf (Int 1) p _ = reduce p
 reduceIf (Int 0) _ p = reduce p
-reduceIf _ _ _       = error "type error: expected a boolean in if-then-else" 
+reduceIf _ _ _       = throw $ RuntimeException $  "type error: expected a boolean" 
 
 -- SUGAR
 
@@ -171,7 +170,7 @@ operator ";" p1 p2 = do
 operator s p1 p2 |  (s `elem` fmap return "+-*/><")
                  || (s `elem` [">=", "<=", "||", "&&"]) =
   arith s p1 p2
-operator s _ _ = error $ "Unknown operator \"" ++ s ++ "\""
+operator s _ _ = throw $ RuntimeException $  "Unknown operator \"" ++ s ++ "\""
 
 arith :: String -> Program -> Program -> TheMonad Value
 arith s p1 p2 = do
@@ -180,7 +179,7 @@ arith s p1 p2 = do
   return $ Int (types v1 v2)
  where
   types (Int n1) (Int n2) = eval n1 n2
-  types y z = error $ "type error: expected integers in arith operator \"" ++ s ++ "\". Got " ++ show y ++ " and " ++ show z
+  types y z = throw $ RuntimeException $ "type error: expected integers in arith operator \"" ++ s ++ "\"\ngot " ++ show y ++ " and " ++ show z
   eval n1 n2 = op s n1 n2
   op "+" = (+)
   op "-" = (-)

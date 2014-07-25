@@ -1,5 +1,7 @@
-module AST2HOAS where
+module Ast2Hoas where
 
+import Control.Exception
+import TheMonad
 import Data.List
 import Data.Maybe
 import qualified Data.Map as Map
@@ -52,7 +54,19 @@ cb AST.CBN = HOAS.CBN
 cb AST.CBV = HOAS.CBV
 
 identError :: AST.Name -> a
-identError i = error $ "unknown identifier \"" ++ i ++ "\""
+identError i = throw $ RuntimeException $ "unknown identifier \"" ++ i ++ "\""
 
 ast2hoas :: AST.Program -> HOAS.Program
 ast2hoas = program identError
+
+-- "outer" is used on the outer level, when we load a list of
+-- objects into the interactive interpreter
+outer :: Table -> AST.Program -> (HOAS.Program, Table)
+outer st (AST.Let nps (AST.Body p)) =
+ (HOAS.Let ps (HOAS.Body p'), st')
+  where
+   p'  = \v -> program (st'' v) p
+   ps  = map (st' . fst) nps
+   st' = map (\(x,y) -> (x, program st' y)) nps ## st
+   st'' v = zip (map fst nps) (map HOAS.Value v) ## st
+outer st p = (program st p, st)
