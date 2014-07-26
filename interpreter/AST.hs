@@ -10,24 +10,24 @@ type Name = String
 data CB = CBV | CBN
   deriving(Show,Eq)
 
-data Program = Invoke Program Name
-             | Update Program CB [Name] Method
-             | Let [(Name, Program)] Body
-             | Operator String Program Program
-             | If Program Program Program
-             | Print Program
-             | Value Value
-             | Ident Name
+data Program = Invoke !Program !Name
+             | Update !Program !CB [Name] !Method
+             | Let [(Name, Program)] !Body
+             | Operator !String !Program !Program
+             | If !Program !Program !Program
+             | Print !Program
+             | Value !Value
+             | Ident !Name
              deriving(Show)
 
 data Body = Body Program deriving(Show)
 
-data Value = New Object
+data Value = New !Object
            | Error
-           | Str String
-           | Int Integer
+           | Str !String
+           | Int !Integer
 
-data Method = Method Name Program -- Name is the ident for "self"
+data Method = Method Name !Program -- Name is the ident for "self"
   deriving(Show)
 
 data Object = Object (Map.Map Name Method)
@@ -52,6 +52,9 @@ nil = Value (New (Object (fromList [])))
 
 field :: Program -> Method
 field p = Method "" p
+
+msg :: String -> Program
+msg = Value . Str
 
 -- SUBSTITUTING
 

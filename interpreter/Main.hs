@@ -1,12 +1,13 @@
 module Main where
 
 import Prelude hiding (interact)
-import System.Environment
 import Control.Exception
 import Control.Monad
 import Control.Monad.Writer
+import System.Environment
 import System.IO hiding (interact)
 import System.IO.Error
+import Data.Map (empty)
 
 import qualified Objects as Ob
 import qualified AST as AST
@@ -15,28 +16,6 @@ import qualified Ast2Hoas as A2H
 import TheMonad
 
 import Debug.Trace
-
-run :: String -> TheMonad Ob.Value
-run = Ob.reduce . A2H.ast2hoas . Parser.parser
-
-runFile :: Bool -> String -> IO ()
-runFile verbose prog = do
-  (val, Stats n) <- runWriterT $ run prog
-  --putStrLn ""
-  print val
-  when verbose (putStrLn $ "(in " ++ show n ++ " reduction"
-             ++ (if n /= 1 then "s" else "") ++ ")")
-
-interp :: String -> IO ()
-interp s = do
-  f <- readFile s
-  runFile True f
-
-parseFile :: String -> IO ()
-parseFile s = do
-  f <- readFile s
-  let p = Parser.parser f
-  putStrLn (show p)
 
 -- INTERACTIVE
 
@@ -60,14 +39,17 @@ getInput = do
   interpData s                = Prog s
 
 interact :: IO ()
-interact = interact' A2H.identError
+interact = interact' A2H.emptyTable
 
 interact' :: A2H.Table -> IO ()
-interact' t = do
+interact' t = handle
+ (\(RuntimeException s) -> 
+     putStrLn ("error: " ++ s) >> interact' t)
+ $ do
   i <- getInput
   case i of
-    Prog s -> crunch t s >>= interact'
-    Load f -> getFile f >>= crunch t >>= interact'
+    Prog s -> crunch "stdin" t s >>= interact'
+    Load f -> getFile f >>= crunch f t >>= interact'
     Help   -> help >> interact' t
     Exit   -> return ()
 
@@ -81,15 +63,19 @@ getFile s = catchIOError (readFile s')
          then s ++ ".fry"
          else s
 
-crunch :: A2H.Table -> String -> IO A2H.Table
-crunch t s = handle
- (\(RuntimeException s) -> putStrLn ("error: " ++ s) >> return t)
- $ do
-    let ast = Parser.runModuleParser s
-    let (hoas, t') = A2H.outer t ast
+type Filename = String
+
+crunch :: Filename -> A2H.Table -> String -> IO A2H.Table
+crunch file t s = do
+    let (imports, ast) = Parser.runModuleParser file s
+    importsP <- sequence $ fmap getFile imports
+    t' <- foldM load t (zip imports importsP)
+    let (hoas, t'') = A2H.outer t' ast
     v <- toIO $ Ob.reduce hoas
     putStrLn (show v)
-    return t'
+    return t''
+ where
+  load t (file, prog) = crunch file t prog
 
 welcome :: IO ()
 welcome = do

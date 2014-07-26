@@ -16,20 +16,20 @@ import TheMonad
 type Name = String
 
 data CB = CBV | CBN
-  deriving(Show,Eq)
+  deriving(Show)
 
-data Program = Invoke !Program !Name
-             | Update !Program !CB !Name !Method
-             | Let [Program] !Body
-             | Operator !String !Program !Program
-             | If !Program !Program !Program
-             | Print !Program
-             | Value !Value
+data Program = Invoke Program Name
+             | Update Program CB Name Method
+             | Let [Program] Body
+             | Operator String Program Program
+             | If Program Program Program
+             | Print Program
+             | Value Value
              deriving(Show)
 
 newtype Body = Body ([Value] -> Program)
 
-data Value = New !Object
+data Value = New Object
            | Error
            | Int Integer
            | Str String
@@ -94,12 +94,14 @@ updateMethod obj@(Object o) n m =
 
 reduce :: Program -> TheMonad Value
 reduce p = do
-  statRed
-  (reduce' p)
+  --statRed
+  reduce' p
 
 reduce' :: Program -> TheMonad Value
-reduce' (Operator s p1 p2) =
-  operator s p1 p2
+reduce' (Operator s p1 p2) = do
+  v1 <- reduce p1
+  v2 <- reduce p2
+  operator s v1 v2
 reduce' (If b p1 p2) = do
   b' <- reduce b
   reduceIf b' p1 p2
@@ -163,19 +165,16 @@ chainUpdate q cb ns m = aux q ns
 
 -- OPERATORS
 
-operator :: String -> Program -> Program -> TheMonad Value
+operator :: String -> Value -> Value -> TheMonad Value
 operator ";" p1 p2 = do
-  reduce p1
-  reduce p2
+  return p2
 operator s p1 p2 |  (s `elem` fmap return "+-*/><")
                  || (s `elem` [">=", "<=", "||", "&&"]) =
   arith s p1 p2
 operator s _ _ = throw $ RuntimeException $  "Unknown operator \"" ++ s ++ "\""
 
-arith :: String -> Program -> Program -> TheMonad Value
-arith s p1 p2 = do
-  v1 <- reduce p1
-  v2 <- reduce p2
+arith :: String -> Value -> Value -> TheMonad Value
+arith s v1 v2 = do
   return $ Int (types v1 v2)
  where
   types (Int n1) (Int n2) = eval n1 n2

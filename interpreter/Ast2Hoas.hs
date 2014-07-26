@@ -1,18 +1,51 @@
 module Ast2Hoas where
 
+import Prelude hiding (lookup)
 import Control.Exception
+import Control.DeepSeq
 import TheMonad
-import Data.List
+import qualified Data.List as List
 import Data.Maybe
 import qualified Data.Map as Map
 
 import qualified AST as AST
 import qualified Objects as HOAS
 
-type Table = AST.Name -> HOAS.Program 
+-- type Table = AST.Name -> HOAS.Program 
+
+-- (##) :: [(AST.Name, HOAS.Program)] -> Table -> Table
+-- (xs ## t) n = t n `fromMaybe` lookup n xs
+
+--------------------
+
+{-
+type Table = Map.Map AST.Name HOAS.Program
 
 (##) :: [(AST.Name, HOAS.Program)] -> Table -> Table
-(xs ## t) n = t n `fromMaybe` lookup n xs
+xs ## t = Map.union (Map.fromList xs) t
+
+lookup :: Table -> AST.Name -> HOAS.Program
+lookup st n = case Map.lookup n st of
+  Just n  -> n
+  Nothing -> throw $ RuntimeException $ "unknown identifier " ++ n
+
+emptyTable = Map.empty
+-}
+
+------------------------------
+
+type Table = [(AST.Name, HOAS.Program)]
+
+(##) :: [(AST.Name, HOAS.Program)] -> Table -> Table
+(##) = (++)
+
+lookup :: Table -> AST.Name -> HOAS.Program
+lookup st n = case List.lookup n st of
+  Just n  -> n
+  Nothing -> throw $ RuntimeException $ "unknown identifier " ++ n
+
+emptyTable = []
+
 
 program :: Table -> AST.Program -> HOAS.Program
 program st (AST.Invoke p n) = HOAS.Invoke (program st p) n
@@ -20,7 +53,7 @@ program st (AST.Update p c ns m) = HOAS.chainUpdate (program st p) (cb c) ns (me
 program st (AST.Let nps (AST.Body p)) = HOAS.Let ps (HOAS.Body p')
  where
   p'  = \v -> program (st'' v) p
-  ps  = map (st' . fst) nps
+  ps  = map (lookup st' . fst) nps
   st' = map (\(x,y) -> (x, program st' y)) nps ## st
   st'' v = zip (map fst nps) (map HOAS.Value v) ## st
 program st (AST.Operator s p1 p2) =
@@ -29,7 +62,7 @@ program st (AST.If b p1 p2) =
   HOAS.If (program st b) (program st p1) (program st p2)
 program st (AST.Print p) = HOAS.Print (program st p)
 program st (AST.Value v) = HOAS.Value (value st v)
-program st (AST.Ident n) = st n
+program st (AST.Ident n) = lookup st n
 
 value :: Table -> AST.Value -> HOAS.Value
 value st (AST.New obj) = HOAS.New (object st obj)
@@ -39,9 +72,11 @@ value st (AST.Str s)   = HOAS.Str s
 
 method :: Table -> AST.Method -> HOAS.Method
 method st (AST.Method n p) =
-  HOAS.Method (\obj@(HOAS.Object m) -> program (
-    ( [(n, HOAS.Value (HOAS.New obj))]
-      ++ fromMaybe [] (fmap (\m -> [("super", fromMethod m obj)]) (Map.lookup "super" m))) ## st) p)
+--  HOAS.Method (\obj@(HOAS.Object m) -> program (
+--    ( [(n, HOAS.Value (HOAS.New obj))]
+--      ++ fromMaybe [] (fmap (\m -> [("super", fromMethod m obj)])-- (Map.lookup "super" m))) ## st) p)
+ HOAS.Method (\obj@(HOAS.Object m) -> program (
+    ( [(n, HOAS.Value (HOAS.New obj))]) ## st) p)
 
 fromMethod :: HOAS.Method -> HOAS.Object -> HOAS.Program
 fromMethod (HOAS.Method f) ob = f ob
@@ -56,8 +91,8 @@ cb AST.CBV = HOAS.CBV
 identError :: AST.Name -> a
 identError i = throw $ RuntimeException $ "unknown identifier \"" ++ i ++ "\""
 
-ast2hoas :: AST.Program -> HOAS.Program
-ast2hoas = program identError
+-- ast2hoas :: AST.Program -> HOAS.Program
+-- ast2hoas = program identError
 
 -- "outer" is used on the outer level, when we load a list of
 -- objects into the interactive interpreter
@@ -66,7 +101,7 @@ outer st (AST.Let nps (AST.Body p)) =
  (HOAS.Let ps (HOAS.Body p'), st')
   where
    p'  = \v -> program (st'' v) p
-   ps  = map (st' . fst) nps
+   ps  = map (lookup st' . fst) nps
    st' = map (\(x,y) -> (x, program st' y)) nps ## st
    st'' v = zip (map fst nps) (map HOAS.Value v) ## st
 outer st p = (program st p, st)

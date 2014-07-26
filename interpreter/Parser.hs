@@ -8,8 +8,6 @@ import Text.Parsec.Expr
 import qualified Data.Map as Map
 import qualified Data.List as List
 
-import Debug.Trace
-
 import qualified AST as AST
 import TheMonad
 
@@ -17,6 +15,7 @@ type Parser = Parsec String ()
 
 keywords, resOps :: [String]
 keywords = ["print", "let", "and", "be", "in", -- core
+            "import", -- outer level
             "object", "extends", "fun", "end", "if", "then", "else", "true", "false"] -- sugar
 resOps = ["->"] ++ map return "=.;@*/+-$?~"
 
@@ -235,18 +234,31 @@ expressionParser = do
   eof
   return x
 
-moduleParser :: Parser AST.Program
-moduleParser = do
-  whiteSpace
-  cd <- many classDecl
-  p <- option (AST.nil) expr
-  eof
-  return $ smartLet cd (AST.Body p)
+--
+-- Outer level
+--
 
-runModuleParser :: String -> AST.Program
-runModuleParser input =
-  case (parse moduleParser "" input) of
-    Left  err -> throw $ RuntimeException $ "parse error at " ++ show err
+type Filename = String
+type Import   = String
+
+importModule :: Parser Import
+importModule = do
+  reserved "import"
+  identifier
+
+moduleParser :: Filename -> Parser ([Import], AST.Program)
+moduleParser file = do
+  whiteSpace
+  imps <- many importModule
+  cd <- many classDecl
+  p <- option (AST.msg $ "loading " ++ file ++ "...") expr
+  eof
+  return (imps, smartLet cd (AST.Body p))
+
+runModuleParser :: Filename -> String -> ([Import], AST.Program)
+runModuleParser file input =
+  case (parse (moduleParser file) "" input) of
+    Left  err -> throw $ RuntimeException $ "parse error in \"" ++ file ++ "\" at " ++ show err
     Right x   -> x
 
 parser :: String -> AST.Program
