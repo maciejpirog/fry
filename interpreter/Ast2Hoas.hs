@@ -11,13 +11,6 @@ import qualified Data.Map as Map
 import qualified AST as AST
 import qualified Objects as HOAS
 
--- type Table = AST.Name -> HOAS.Program 
-
--- (##) :: [(AST.Name, HOAS.Program)] -> Table -> Table
--- (xs ## t) n = t n `fromMaybe` lookup n xs
-
---------------------
-
 {-
 type Table = Map.Map AST.Name HOAS.Program
 
@@ -45,6 +38,8 @@ lookup st n = case List.lookup n st of
   Nothing -> throw $ RuntimeException $ "unknown identifier " ++ n
 
 emptyTable = []
+
+----------------------------------
 
 program :: Table -> AST.Program -> HOAS.Program
 program st (AST.Invoke p n) = HOAS.Invoke (program st p) n
