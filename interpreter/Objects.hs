@@ -83,7 +83,7 @@ updateMethod obj@(Object o) n m =
   case Map.lookup n o of
     -- the method is declared on top-level -- overwrite here!
     Just _ -> return $ Object (Map.insert n m o)
-    -- the method may be super's method
+    -- the method might be super's method
     Nothing -> case Map.lookup "super" o of
       Just s ->
         do New so <- reduce (readField s obj)
@@ -106,24 +106,24 @@ reduce' (If b p1 p2) = do
   b' <- reduce b
   reduceIf b' p1 p2
 reduce' (Invoke p l) = do
-  o' <- reduce p
-  case o' of
+  v <- reduce p
+  case v of
     New o -> do m <- getMethod o l
                 reduceMethod o m
-    _ -> throw $ RuntimeException $ (show o') ++ " is not an object"
+    _ -> throw $ RuntimeException $ (show v) ++ " is not an object"
 reduce' (Update p CBV l (Method f)) = do
   v <- reduce p
   case v of
-   New o -> do k <- reduce (f o)
-               o' <- updateMethod o l (programToMethod (Value k))
-               return (New o')
-   k -> throw $ RuntimeException $ "type error: " ++ show k ++ " not an object"
+    New o -> do k <- reduce (f o)
+                o' <- updateMethod o l (programToMethod (Value k))
+                return (New o')
+    k -> throw $ RuntimeException $ "type error: " ++ show k ++ " not an object"
 reduce' (Update p CBN l m) = do
   v <- reduce p
   case v of
-   New o -> do o' <- updateMethod o l m
-               return (New o')
-   k -> throw $ RuntimeException $ "type error: " ++ show k ++ " not an object"
+    New o -> do o' <- updateMethod o l m
+                return (New o')
+    k -> throw $ RuntimeException $ "type error: " ++ show k ++ " not an object"
 reduce' (Let ps (Body f)) = do
   vs <- mapM reduce ps
   reduce (f vs)

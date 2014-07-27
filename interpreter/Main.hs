@@ -19,7 +19,9 @@ import Debug.Trace
 
 -- INTERACTIVE
 
-data Input = Prog String | Load String | Exit | Help
+type Filename = String
+
+data Input = Prog String | Load Filename | Exit | Help
 
 getInput :: IO Input
 getInput = do
@@ -62,8 +64,6 @@ getFile s = catchIOError (readFile s')
   s' = if (reverse $ take 4 $ reverse s) /= ".fry"
          then s ++ ".fry"
          else s
-
-type Filename = String
 
 crunch :: Filename -> A2H.Table -> String -> IO A2H.Table
 crunch file t s = do

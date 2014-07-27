@@ -46,7 +46,6 @@ lookup st n = case List.lookup n st of
 
 emptyTable = []
 
-
 program :: Table -> AST.Program -> HOAS.Program
 program st (AST.Invoke p n) = HOAS.Invoke (program st p) n
 program st (AST.Update p c ns m) = HOAS.chainUpdate (program st p) (cb c) ns (method st m)
@@ -72,9 +71,6 @@ value st (AST.Str s)   = HOAS.Str s
 
 method :: Table -> AST.Method -> HOAS.Method
 method st (AST.Method n p) =
---  HOAS.Method (\obj@(HOAS.Object m) -> program (
---    ( [(n, HOAS.Value (HOAS.New obj))]
---      ++ fromMaybe [] (fmap (\m -> [("super", fromMethod m obj)])-- (Map.lookup "super" m))) ## st) p)
  HOAS.Method (\obj@(HOAS.Object m) -> program (
     ( [(n, HOAS.Value (HOAS.New obj))]) ## st) p)
 
@@ -91,11 +87,12 @@ cb AST.CBV = HOAS.CBV
 identError :: AST.Name -> a
 identError i = throw $ RuntimeException $ "unknown identifier \"" ++ i ++ "\""
 
--- ast2hoas :: AST.Program -> HOAS.Program
--- ast2hoas = program identError
-
 -- "outer" is used on the outer level, when we load a list of
--- objects into the interactive interpreter
+-- objects into the interactive interpreter. There is a special
+-- case if the outer expression is a "let": in such a case the
+-- defined values stay in the global namespace, so they can be
+-- called from the interactive interpreter or from a file that
+-- imports this file as a library.
 outer :: Table -> AST.Program -> (HOAS.Program, Table)
 outer st (AST.Let nps (AST.Body p)) =
  (HOAS.Let ps (HOAS.Body p'), st')
