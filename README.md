@@ -1,9 +1,11 @@
-fry
+Fry
 ===
 
-Fry, a declarative object-oriented programming language. Implemented as a proof of concept for a talk I gave a long time ago to support a far-fetched thesis that if you want to do principled OO programming, you'll end up functional anyway.
+![FRY](http://maciejpirog.github.io/fry/logo-green-450.png)
 
-Homepage (tutorials and examples): [http://maciejpirog.github.io/fry](http://maciejpirog.github.io/fry)
+A declarative object-oriented programming language. Implemented as a proof of concept for a talk I gave a long time ago to support a far-fetched thesis that if you want to do principled OO programming, you'll end up functional anyway.
+
+Homepage (tutorials, examples, and a formal semantics): [http://maciejpirog.github.io/fry](http://maciejpirog.github.io/fry)
 
 About Fry
 ---------
