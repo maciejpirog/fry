@@ -1,7 +1,7 @@
 fry
 ===
 
-Fry, a declarative object-oriented programming language
+Fry, a declarative object-oriented programming language. Implemented as a proof of concept for a talk I gave a long time ago to support a far-fetched thesis that if you want to do principled OO programming, you'll end up functional anyway.
 
 Homepage (tutorials and examples): [http://maciejpirog.github.io/fry](http://maciejpirog.github.io/fry)
 
